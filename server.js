@@ -197,6 +197,21 @@ io.on('connection', (socket) => {
       console.log(`[-] ${player.name} disconnected`);
       const playerName = player.name;
       delete gameState.players[socket.id];
+
+      const remainingPlayers = Object.keys(gameState.players).length;
+      if (remainingPlayers === 0) {
+        gameState.phase = 'lobby';
+        gameState.rounds = [];
+        gameState.currentRound = 0;
+        gameState.revealedWords = [];
+        gameState.chatMessages = [];
+        colorIndex = 0;
+
+        console.log('[GAME] No players remaining, reset to lobby');
+        io.emit('game_reset');
+        return;
+      }
+
       io.emit('players_update', getPlayerList());
       broadcastSystemMessage(`${playerName} disconnected.`);
 
