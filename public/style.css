@@ -53,13 +53,15 @@ body {
   /* Subtle grid pattern in the background */
   background-image: radial-gradient(circle at 1px 1px, #ffffff08 1px, transparent 0);
   background-size: 32px 32px;
+  overflow-x: hidden;
 }
 
 /* ── Screens ────────────────────────────────────────────────── */
 /* Every top-level page section is a "screen". Only .active is visible. */
 .screen {
   display: none;
-  padding: 24px 0 64px;
+  min-height: 100dvh;
+  padding: clamp(16px, 4vw, 28px) 0 calc(44px + env(safe-area-inset-bottom));
 }
 .screen.active {
   display: block;
@@ -74,12 +76,12 @@ body {
 /* ── Container ──────────────────────────────────────────────── */
 .container {
   width: 100%;
-  max-width: 560px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 clamp(12px, 4vw, 24px);
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
+  gap: clamp(12px, 2.5vw, var(--gap));
 }
 
 /* ── Cards ──────────────────────────────────────────────────── */
@@ -87,7 +89,7 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: clamp(14px, 3.5vw, 20px);
 }
 
 /* ── Typography helpers ─────────────────────────────────────── */
@@ -157,7 +159,7 @@ body {
   margin-bottom: 8px;
 }
 .game-title {
-  font-size: 2rem;
+  font-size: clamp(1.55rem, 5vw, 2rem);
   font-weight: 900;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
@@ -168,13 +170,14 @@ body {
 .game-tagline {
   color: var(--text-sub);
   margin-top: 4px;
-  font-size: 0.95rem;
+  font-size: clamp(0.88rem, 2.4vw, 0.95rem);
 }
 
 /* ── Input + button row ─────────────────────────────────────── */
 .input-row {
   display: flex;
   gap: 8px;
+  align-items: stretch;
 }
 input[type="text"] {
   flex: 1;
@@ -183,6 +186,7 @@ input[type="text"] {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 1rem;
+  min-width: 0;
   padding: 10px 14px;
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition);
@@ -201,7 +205,7 @@ input[type="text"]:disabled {
 .btn {
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 0.95rem;
+  font-size: clamp(0.9rem, 2.6vw, 0.95rem);
   font-weight: 600;
   font-family: var(--font);
   padding: 10px 20px;
@@ -380,7 +384,7 @@ input[type="text"]:disabled {
 /* ── Players grid (submission status) ──────────────────────── */
 .players-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
 }
 .player-tile {
@@ -458,7 +462,8 @@ input[type="text"]:disabled {
 }
 .history-word-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 0.9rem;
 }
@@ -488,12 +493,13 @@ input[type="text"]:disabled {
   margin-bottom: 10px;
 }
 .winning-word {
-  font-size: 2.6rem;
+  font-size: clamp(1.9rem, 9vw, 2.6rem);
   font-weight: 900;
   letter-spacing: -0.02em;
   color: var(--success);
   text-shadow: 0 0 32px #4ecdc460;
   margin-bottom: 10px;
+  word-break: break-word;
 }
 .rounds-taken {
   font-size: 0.95rem;
@@ -510,8 +516,55 @@ input[type="text"]:disabled {
 ::-webkit-scrollbar-thumb  { background: var(--card-border); border-radius: 3px; }
 
 /* ── Responsive tweaks ──────────────────────────────────────── */
-@media (max-width: 400px) {
-  .game-title { font-size: 1.6rem; }
-  .winning-word { font-size: 2rem; }
-  .btn-accent { padding: 10px 24px; }
+@media (max-width: 768px) {
+  .players-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .input-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .input-row .btn,
+  .start-area .btn,
+  .btn-accent {
+    width: 100%;
+  }
+
+  .word-chip {
+    font-size: 0.9rem;
+    padding: 6px 14px;
+  }
+
+  .round-badge {
+    width: 100%;
+    text-align: center;
+  }
+
+  .players-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .container {
+    padding: 0 10px;
+  }
+
+  .game-header {
+    padding-top: 8px;
+  }
+
+  .logo-mark {
+    width: 44px;
+    height: 44px;
+    font-size: 1.35rem;
+  }
+
+  .btn {
+    padding: 10px 14px;
+  }
 }
