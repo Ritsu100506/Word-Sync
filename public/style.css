@@ -1,0 +1,517 @@
+/* ============================================================
+   WordSync — Main Stylesheet
+   Dark theme, card-based layout, responsive single-column.
+   ============================================================ */
+
+/* ── Custom Properties ──────────────────────────────────────── */
+:root {
+  /* Palette */
+  --bg:          #0d0f1a;
+  --surface:     #141625;
+  --card:        #1b1e30;
+  --card-border: #252844;
+  --input-bg:    #111325;
+
+  /* Text */
+  --text:        #edeef8;
+  --text-sub:    #9ea3c4;
+  --muted:       #575d7a;
+
+  /* Accent / brand */
+  --accent:      #7c6df5;      /* purple */
+  --accent-glow: #7c6df530;
+  --accent-2:    #ff6b6b;      /* red-coral */
+  --success:     #4ecdc4;      /* teal */
+  --warn:        #ffd166;      /* yellow */
+
+  /* Spacing / radius */
+  --radius:      14px;
+  --radius-sm:   8px;
+  --gap:         16px;
+
+  /* Typography */
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Transition */
+  --transition: 0.2s ease;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+  /* Subtle grid pattern in the background */
+  background-image: radial-gradient(circle at 1px 1px, #ffffff08 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+/* ── Screens ────────────────────────────────────────────────── */
+/* Every top-level page section is a "screen". Only .active is visible. */
+.screen {
+  display: none;
+  padding: 24px 0 64px;
+}
+.screen.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Container ──────────────────────────────────────────────── */
+.container {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* ── Cards ──────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* ── Typography helpers ─────────────────────────────────────── */
+.card-heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.card-subheading {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  margin-bottom: 14px;
+}
+.section-heading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.section-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.section-row .card-heading { margin-bottom: 0; }
+
+/* ── Badge (player count) ───────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 99px;
+  padding: 0 6px;
+}
+
+/* ── Game header / branding ─────────────────────────────────── */
+.game-header {
+  text-align: center;
+  padding: 16px 0 4px;
+}
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, var(--accent), #ff6bdc);
+  border-radius: var(--radius);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 10px;
+  box-shadow: 0 8px 24px var(--accent-glow);
+}
+.confetti-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+.game-title {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.game-tagline {
+  color: var(--text-sub);
+  margin-top: 4px;
+  font-size: 0.95rem;
+}
+
+/* ── Input + button row ─────────────────────────────────────── */
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+input[type="text"] {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 1rem;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+input[type="text"]::placeholder { color: var(--muted); }
+input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+input[type="text"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: var(--font);
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.88;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, var(--accent), #ff6bdc);
+  color: #fff;
+  font-size: 1rem;
+  padding: 12px 32px;
+}
+.btn-accent:hover:not(:disabled) {
+  opacity: 0.88;
+  box-shadow: 0 6px 20px #7c6df540;
+}
+
+/* ── Error / confirm text ───────────────────────────────────── */
+.error-text {
+  color: var(--accent-2);
+  font-size: 0.82rem;
+  margin-top: 8px;
+  min-height: 18px;
+}
+.confirm-text {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  min-height: 18px;
+  font-weight: 500;
+}
+.hint-text {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* ── Start / play-again area ────────────────────────────────── */
+.start-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+/* ── Lobby player list ──────────────────────────────────────── */
+#player-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  animation: slideIn 0.25s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+.player-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.player-name-label {
+  font-weight: 500;
+  font-size: 0.95rem;
+  flex: 1;
+}
+.player-you-tag {
+  font-size: 0.7rem;
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+  padding: 1px 7px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.empty-state {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 8px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ── How-to-play card ───────────────────────────────────────── */
+.how-to-card { border-color: #252844; }
+.how-to-list {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-sub);
+  font-size: 0.9rem;
+}
+.how-to-list li strong { color: var(--text); }
+
+/* ── Game round header ──────────────────────────────────────── */
+.game-round-header {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+.round-badge {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 99px;
+  padding: 6px 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.round-badge span {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+/* ── Prompt card ────────────────────────────────────────────── */
+.prompt-card { text-align: center; }
+.prompt-label {
+  font-size: 1rem;
+  color: var(--text-sub);
+  margin-bottom: 12px;
+}
+
+/* Revealed word chips (shown as prompt for next round) */
+.revealed-words {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.word-chip {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 99px;
+  padding: 6px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  animation: popIn 0.3s ease both;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+/* ── Players grid (submission status) ──────────────────────── */
+.players-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.player-tile {
+  background: var(--surface);
+  border: 2px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+  transition: border-color 0.3s, background 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+/* Subtle color stripe on the top edge using CSS custom property --tile-color */
+.player-tile::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--tile-color, var(--muted));
+  border-radius: 2px 2px 0 0;
+}
+.player-tile.submitted {
+  border-color: var(--success);
+  background: #4ecdc415;
+}
+.tile-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.player-tile.submitted .tile-status {
+  color: var(--success);
+}
+.tile-word {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 6px;
+  min-height: 18px;
+}
+.tile-word.reveal {
+  animation: revealWord 0.4s ease 0.1s both;
+}
+@keyframes revealWord {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Round history ──────────────────────────────────────────── */
+.history-round {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.history-round:last-child { border-bottom: none; }
+.history-round-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.history-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.history-word-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.history-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.history-word-text {
+  font-weight: 700;
+  color: var(--text);
+}
+.history-player-name {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ── Finished screen ────────────────────────────────────────── */
+.winning-card { text-align: center; padding: 28px 20px; }
+.winning-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.winning-word {
+  font-size: 2.6rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--success);
+  text-shadow: 0 0 32px #4ecdc460;
+  margin-bottom: 10px;
+}
+.rounds-taken {
+  font-size: 0.95rem;
+  color: var(--text-sub);
+}
+.rounds-taken strong { color: var(--text); }
+
+/* ── Utilities ──────────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; }
+::-webkit-scrollbar-track  { background: var(--bg); }
+::-webkit-scrollbar-thumb  { background: var(--card-border); border-radius: 3px; }
+
+/* ── Responsive tweaks ──────────────────────────────────────── */
+@media (max-width: 400px) {
+  .game-title { font-size: 1.6rem; }
+  .winning-word { font-size: 2rem; }
+  .btn-accent { padding: 10px 24px; }
+}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordSync — Multiplayer Word Convergence</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCREEN: LOBBY
+       Players enter their names and wait for the game to start.
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="screen-lobby" class="screen active">
+    <div class="container">
+
+      <!-- Game title / branding -->
+      <header class="game-header">
+        <div class="logo-mark">W</div>
+        <h1 class="game-title">WordSync</h1>
+        <p class="game-tagline">Think alike. Converge. Win.</p>
+      </header>
+
+      <!-- Name entry form -->
+      <section class="card join-card">
+        <h2 class="card-heading">Join the Game</h2>
+        <p class="card-subheading">Enter a name and wait for others to join, then anyone can start.</p>
+        <div class="input-row">
+          <input
+            id="name-input"
+            type="text"
+            placeholder="Your name…"
+            maxlength="20"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="join-btn" class="btn btn-primary">Join</button>
+        </div>
+        <p id="join-error" class="error-text" aria-live="polite"></p>
+      </section>
+
+      <!-- Live player list -->
+      <section class="card players-card">
+        <div class="section-row">
+          <h2 class="card-heading">Lobby</h2>
+          <span class="badge" id="player-count">0</span>
+        </div>
+        <ul id="player-list">
+          <li class="empty-state">No players yet — be the first to join!</li>
+        </ul>
+      </section>
+
+      <!-- Start game controls -->
+      <div class="start-area">
+        <button id="start-btn" class="btn btn-accent" disabled>Start Game</button>
+        <p id="start-hint" class="hint-text">Need at least 2 players (0/2)</p>
+      </div>
+
+      <!-- How-to-play instructions -->
+      <section class="card how-to-card">
+        <h2 class="card-heading">How to Play</h2>
+        <ol class="how-to-list">
+          <li>Every player submits <strong>one word</strong> — anything you like.</li>
+          <li>All words are revealed at once.</li>
+          <li>Now submit a <strong>new word</strong> that connects the revealed words.</li>
+          <li>Keep going — the goal is for <strong>everyone to submit the same word</strong>.</li>
+          <li>When all words match, the game ends — fastest convergence wins!</li>
+        </ol>
+      </section>
+
+    </div>
+  </div><!-- /#screen-lobby -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCREEN: GAME
+       Active play — submit words, see who has submitted, view history.
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="screen-game" class="screen">
+    <div class="container">
+
+      <!-- Round counter badge -->
+      <header class="game-round-header">
+        <div class="round-badge">
+          Round <span id="round-number">1</span>
+        </div>
+      </header>
+
+      <!-- Prompt + revealed word chips -->
+      <section class="card prompt-card">
+        <p id="prompt-label" class="prompt-label">Round 1 — Submit your opening word</p>
+        <div id="revealed-words" class="revealed-words"></div>
+      </section>
+
+      <!-- Word input + submission -->
+      <section class="card submit-card">
+        <div class="input-row">
+          <input
+            id="word-input"
+            type="text"
+            placeholder="Your word…"
+            maxlength="40"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="submit-word-btn" class="btn btn-primary">Submit</button>
+        </div>
+        <p id="word-error" class="error-text" aria-live="polite"></p>
+        <p id="submitted-confirmation" class="confirm-text" aria-live="polite"></p>
+      </section>
+
+      <!-- Per-player submission status tiles -->
+      <section class="card">
+        <h3 class="section-heading">Players</h3>
+        <div id="players-grid" class="players-grid"></div>
+      </section>
+
+      <!-- Round history (hidden until round 2+) -->
+      <section id="history-wrap" class="card hidden">
+        <h3 class="section-heading">Round History</h3>
+        <div id="history-list"></div>
+      </section>
+
+    </div>
+  </div><!-- /#screen-game -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCREEN: FINISHED
+       Show the winning word, total rounds, and full history.
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="screen-finished" class="screen">
+    <div class="container">
+
+      <header class="game-header">
+        <div class="confetti-icon">🎉</div>
+        <h1 class="game-title">Convergence!</h1>
+        <p class="game-tagline">Everyone reached the same word.</p>
+      </header>
+
+      <!-- Winning word hero -->
+      <section class="card winning-card">
+        <p class="winning-label">Winning word</p>
+        <div id="winning-word" class="winning-word"></div>
+        <p id="rounds-taken" class="rounds-taken"></p>
+      </section>
+
+      <!-- Full round-by-round breakdown -->
+      <section class="card">
+        <h3 class="section-heading">All Rounds</h3>
+        <div id="results-rounds"></div>
+      </section>
+
+      <div class="start-area">
+        <button id="play-again-btn" class="btn btn-accent">Play Again</button>
+      </div>
+
+    </div>
+  </div><!-- /#screen-finished -->
+
+
+  <!-- Socket.io client (served automatically by the server) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Client-side game logic -->
+  <script src="/game.js"></script>
+
+</body>
+</html>
