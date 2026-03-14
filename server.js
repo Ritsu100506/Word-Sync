@@ -23,6 +23,7 @@ const gameState = {
   rounds: [],           // Array of round objects { words: {name: word}, allSame: bool }
   currentRound: 0,
   revealedWords: [],    // Words shown as prompts for next round
+  chatMessages: [],     // Chat history shown to newly connected players
 };
 
 // Palette of distinct player colors
@@ -33,6 +34,7 @@ const PLAYER_COLORS = [
 ];
 
 let colorIndex = 0;
+const MAX_CHAT_MESSAGES = 120;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,29 @@ function checkWinCondition(words) {
   return normalized.every(w => w === normalized[0]);
 }
 
+function buildChatMessage(name, text, system = false) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    text,
+    system,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function appendChatMessage(message) {
+  gameState.chatMessages.push(message);
+  if (gameState.chatMessages.length > MAX_CHAT_MESSAGES) {
+    gameState.chatMessages.shift();
+  }
+}
+
+function broadcastSystemMessage(text) {
+  const message = buildChatMessage('System', text, true);
+  appendChatMessage(message);
+  io.emit('chat_message', message);
+}
+
 // ─── Socket.io Events ─────────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
@@ -74,6 +99,7 @@ io.on('connection', (socket) => {
     rounds: gameState.rounds,
     currentRound: gameState.currentRound,
     revealedWords: gameState.revealedWords,
+    chatMessages: gameState.chatMessages,
   });
 
   // ── Player joins lobby ──────────────────────────────────────────────────────
@@ -99,6 +125,21 @@ io.on('connection', (socket) => {
     console.log(`  Player joined: ${trimmedName}`);
     socket.emit('join_success', { name: trimmedName, color: gameState.players[socket.id].color });
     io.emit('players_update', getPlayerList());
+    broadcastSystemMessage(`${trimmedName} joined the lobby.`);
+  });
+
+  // ── Chat message ───────────────────────────────────────────────────────────
+  socket.on('send_chat', ({ text }) => {
+    const trimmedText = (text || '').trim();
+    if (!trimmedText) return;
+    if (trimmedText.length > 180) {
+      return socket.emit('chat_error', 'Message is too long (max 180 characters).');
+    }
+
+    const sender = gameState.players[socket.id]?.name || 'Guest';
+    const message = buildChatMessage(sender, trimmedText, false);
+    appendChatMessage(message);
+    io.emit('chat_message', message);
   });
 
   // ── Host starts game ────────────────────────────────────────────────────────
@@ -121,6 +162,7 @@ io.on('connection', (socket) => {
       round: gameState.currentRound,
       revealedWords: [],
     });
+    broadcastSystemMessage('Game started. Good luck!');
   });
 
   // ── Player submits a word ───────────────────────────────────────────────────
@@ -153,8 +195,10 @@ io.on('connection', (socket) => {
     const player = gameState.players[socket.id];
     if (player) {
       console.log(`[-] ${player.name} disconnected`);
+      const playerName = player.name;
       delete gameState.players[socket.id];
       io.emit('players_update', getPlayerList());
+      broadcastSystemMessage(`${playerName} disconnected.`);
 
       // If game is running and everyone remaining has submitted, process round
       if (gameState.phase === 'submitting' && checkAllSubmitted()) {
@@ -177,9 +221,11 @@ io.on('connection', (socket) => {
 
     // Clear all players so everyone re-joins fresh
     gameState.players = {};
+    gameState.chatMessages = [];
 
     console.log('[GAME] Reset to lobby');
     io.emit('game_reset');
+    broadcastSystemMessage('Game reset. Join to start a new match.');
   });
 });
 

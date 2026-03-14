@@ -159,6 +159,31 @@
     </div>
   </div><!-- /#screen-finished -->
 
+  <!-- Shared chat panel -->
+  <aside id="chat-panel" class="chat-panel" aria-label="Game chat">
+    <div class="chat-header">
+      <h2 class="chat-title">Chat</h2>
+      <span class="chat-subtitle">Live</span>
+    </div>
+
+    <div id="chat-messages" class="chat-messages" aria-live="polite">
+      <p class="chat-empty">No messages yet.</p>
+    </div>
+
+    <form id="chat-form" class="chat-form">
+      <input
+        id="chat-input"
+        type="text"
+        placeholder="Type a message..."
+        maxlength="180"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="chat-send-btn" type="submit" class="btn btn-primary">Send</button>
+    </form>
+    <p id="chat-error" class="error-text chat-error" aria-live="polite"></p>
+  </aside>
+
 
   <!-- Socket.io client (served automatically by the server) -->
   <script src="/socket.io/socket.io.js"></script>

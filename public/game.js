@@ -11,6 +11,7 @@ let myName = null;       // This player's name
 let myColor = null;      // This player's assigned color
 let hasSubmitted = false; // Whether we've submitted this round
 let playerColors = {};   // { name: color } for all players
+let chatHistory = [];    // Cached chat history for this client session
 
 // ─── DOM References ───────────────────────────────────────────────────────────
 const screens = {
@@ -45,6 +46,12 @@ const winningWordEl   = document.getElementById('winning-word');
 const roundsTakenEl   = document.getElementById('rounds-taken');
 const resultsRoundsEl = document.getElementById('results-rounds');
 const playAgainBtn    = document.getElementById('play-again-btn');
+
+// Chat elements
+const chatMessagesEl = document.getElementById('chat-messages');
+const chatForm       = document.getElementById('chat-form');
+const chatInput      = document.getElementById('chat-input');
+const chatError      = document.getElementById('chat-error');
 
 // ─── Screen Management ────────────────────────────────────────────────────────
 function showScreen(name) {
@@ -197,12 +204,78 @@ function renderFinishScreen(data) {
   showScreen('finished');
 }
 
+// ─── Chat UI ─────────────────────────────────────────────────────────────────
+
+function formatChatTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function shouldStickToBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 36;
+}
+
+function scrollChatToBottom() {
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+function makeChatMessageHtml(message) {
+  const mineClass = !message.system && message.name === myName ? ' me' : '';
+  const systemClass = message.system ? ' system' : '';
+  const sender = message.system ? 'System' : escapeHtml(message.name || 'Guest');
+  const text = escapeHtml(message.text || '');
+  const time = escapeHtml(formatChatTime(message.timestamp));
+
+  return `
+    <div class="chat-message${mineClass}${systemClass}">
+      <div class="chat-message-meta">
+        <span class="chat-message-name">${sender}</span>
+        <span class="chat-message-time">${time}</span>
+      </div>
+      <div class="chat-message-text">${text}</div>
+    </div>
+  `;
+}
+
+function renderChatHistory(messages) {
+  chatHistory = Array.isArray(messages) ? messages.slice() : [];
+  chatMessagesEl.innerHTML = '';
+
+  if (chatHistory.length === 0) {
+    chatMessagesEl.innerHTML = '<p class="chat-empty">No messages yet.</p>';
+    return;
+  }
+
+  chatHistory.forEach((message) => {
+    chatMessagesEl.insertAdjacentHTML('beforeend', makeChatMessageHtml(message));
+  });
+  scrollChatToBottom();
+}
+
+function addChatMessage(message) {
+  const stickToBottom = shouldStickToBottom(chatMessagesEl);
+  const hasEmpty = chatMessagesEl.querySelector('.chat-empty');
+  if (hasEmpty) {
+    chatMessagesEl.innerHTML = '';
+  }
+
+  chatHistory.push(message);
+  chatMessagesEl.insertAdjacentHTML('beforeend', makeChatMessageHtml(message));
+
+  if (stickToBottom) {
+    scrollChatToBottom();
+  }
+}
+
 // ─── Socket Events ────────────────────────────────────────────────────────────
 
 // Initial sync when we connect (e.g., on page refresh)
 socket.on('state_sync', (state) => {
   // Rebuild color map
   state.players.forEach(p => { playerColors[p.name] = p.color; });
+  renderChatHistory(state.chatMessages);
 
   if (state.phase === 'lobby') {
     showScreen('lobby');
@@ -241,6 +314,16 @@ socket.on('join_success', ({ name, color }) => {
 // Lobby: join failed
 socket.on('join_error', (msg) => {
   joinError.textContent = msg;
+});
+
+// Chat send error
+socket.on('chat_error', (msg) => {
+  chatError.textContent = msg;
+});
+
+// New incoming chat message
+socket.on('chat_message', (message) => {
+  addChatMessage(message);
 });
 
 // Game started — transition to game screen
@@ -305,6 +388,7 @@ socket.on('game_reset', () => {
   joinBtn.disabled = false;
   joinBtn.textContent = 'Join';
   joinError.textContent = '';
+  chatError.textContent = '';
   showScreen('lobby');
   renderLobbyPlayers([]);
 });
@@ -360,6 +444,22 @@ wordInput.addEventListener('keydown', (e) => {
 // Play again → reset
 playAgainBtn.addEventListener('click', () => {
   socket.emit('reset_game');
+});
+
+// Chat submit
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+
+  const text = chatInput.value.trim();
+  if (!text) return;
+  if (text.length > 180) {
+    chatError.textContent = 'Message is too long (max 180 characters).';
+    return;
+  }
+
+  socket.emit('send_chat', { text });
+  chatInput.value = '';
+  chatError.textContent = '';
 });
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
