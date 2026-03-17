@@ -42,6 +42,7 @@ const wordInput          = document.getElementById('word-input');
 const submitWordBtn      = document.getElementById('submit-word-btn');
 const editWordBtn        = document.getElementById('edit-word-btn');
 const wordSuggestionsEl  = document.getElementById('word-suggestions');
+const proceedRoundBtn    = document.getElementById('proceed-round-btn');
 const wordError          = document.getElementById('word-error');
 const submittedConfirm   = document.getElementById('submitted-confirmation');
 const playersGrid        = document.getElementById('players-grid');
@@ -157,6 +158,8 @@ function resetWordInput() {
   submitWordBtn.disabled = false;
   editWordBtn.classList.add('hidden');
   editWordBtn.disabled = true;
+  proceedRoundBtn.classList.add('hidden');
+  proceedRoundBtn.disabled = false;
   wordError.textContent = '';
   submittedConfirm.textContent = '';
   clearWordSuggestions();
@@ -187,8 +190,20 @@ function setEditableState(prefillWord = '') {
   if (wordInput.value.trim().length < 2) {
     clearWordSuggestions();
   }
+  proceedRoundBtn.classList.add('hidden');
+  proceedRoundBtn.disabled = false;
   submittedConfirm.textContent = '';
   wordInput.focus();
+}
+
+function showProceedToNextRoundButton() {
+  proceedRoundBtn.classList.remove('hidden');
+  proceedRoundBtn.disabled = false;
+}
+
+function hideProceedToNextRoundButton() {
+  proceedRoundBtn.classList.add('hidden');
+  proceedRoundBtn.disabled = false;
 }
 
 function clearWordSuggestions() {
@@ -516,6 +531,9 @@ socket.on('state_sync', (state) => {
     renderPlayersGrid(state.players);
     updateRoundTimer(state.roundTimeRemaining || 60);
     syncMySubmissionState(state.players);
+    if (state.canProceedAfterInvalidation) {
+      showProceedToNextRoundButton();
+    }
   } else if (state.phase === 'finished') {
     showScreen('finished');
   }
@@ -571,6 +589,7 @@ socket.on('game_started', ({ players, round, revealedWords }) => {
   renderPlayersGrid(players);
   resetWordInput();
   updateRoundTimer(60);
+  hideProceedToNextRoundButton();
 });
 
 // A round just ended — show reveal, then set up next round
@@ -592,6 +611,7 @@ socket.on('round_reveal', ({ round, nextRound, revealedWords, players }) => {
     setRoundPrompt(nextRound, revealedWords);
     renderPlayersGrid(players);
     resetWordInput();
+    hideProceedToNextRoundButton();
   }, 2200);
 });
 
@@ -603,11 +623,20 @@ socket.on('round_invalidated', ({ round, missingPlayers, submittedPlayers, playe
   renderPlayersGrid(players);
   setEditableState('');
   addInvalidRoundToHistory({ round, missingPlayers, submittedPlayers });
+  showProceedToNextRoundButton();
 
   const missingList = Array.isArray(missingPlayers) && missingPlayers.length > 0
     ? ` Missing: ${missingPlayers.join(', ')}.`
     : '';
   wordError.textContent = `Round ${round} invalidated (1-minute timer expired).${missingList}`;
+});
+
+socket.on('round_advanced_after_invalidation', ({ nextRound, revealedWords, players }) => {
+  setRoundPrompt(nextRound, revealedWords);
+  renderPlayersGrid(players);
+  resetWordInput();
+  hideProceedToNextRoundButton();
+  wordError.textContent = '';
 });
 
 socket.on('round_warning', ({ phrase, durationMs }) => {
@@ -651,6 +680,7 @@ socket.on('game_reset', () => {
   updateRoundTimer(60);
   topWarningCard.classList.add('hidden');
   clearWordSuggestions();
+  hideProceedToNextRoundButton();
 });
 
 // ─── User Interactions ────────────────────────────────────────────────────────
@@ -700,6 +730,10 @@ submitWordBtn.addEventListener('click', handleWordSubmit);
 editWordBtn.addEventListener('click', () => {
   if (!hasSubmitted) return;
   socket.emit('edit_submission');
+});
+proceedRoundBtn.addEventListener('click', () => {
+  proceedRoundBtn.disabled = true;
+  socket.emit('proceed_after_invalid_round');
 });
 wordInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleWordSubmit();

@@ -297,6 +297,16 @@ input[type="text"]:disabled {
   font-size: 0.78rem;
 }
 
+.submit-actions-row {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.submit-actions-row .btn {
+  width: auto;
+}
+
 /* ── Start / play-again area ────────────────────────────────── */
 .start-area {
   display: flex;
@@ -848,6 +858,14 @@ input[type="text"]:disabled {
 
   .chat-form {
     flex-direction: column;
+  }
+
+  .submit-actions-row {
+    justify-content: stretch;
+  }
+
+  .submit-actions-row .btn {
+    width: 100%;
   }
 
   .chat-form .btn {
