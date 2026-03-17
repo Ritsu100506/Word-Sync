@@ -10,8 +10,12 @@ const socket = io();
 let myName = null;       // This player's name
 let myColor = null;      // This player's assigned color
 let hasSubmitted = false; // Whether we've submitted this round
+let lastSubmittedWord = '';
 let playerColors = {};   // { name: color } for all players
 let chatHistory = [];    // Cached chat history for this client session
+let topWarningTimeout = null;
+let suggestionAbortController = null;
+let suggestionDebounceTimer = null;
 
 // ─── DOM References ───────────────────────────────────────────────────────────
 const screens = {
@@ -31,15 +35,19 @@ const startHint      = document.getElementById('start-hint');
 
 // Game elements
 const roundNumber        = document.getElementById('round-number');
+const roundTimer         = document.getElementById('round-timer');
 const promptLabel        = document.getElementById('prompt-label');
 const revealedWordsEl    = document.getElementById('revealed-words');
 const wordInput          = document.getElementById('word-input');
 const submitWordBtn      = document.getElementById('submit-word-btn');
+const editWordBtn        = document.getElementById('edit-word-btn');
+const wordSuggestionsEl  = document.getElementById('word-suggestions');
 const wordError          = document.getElementById('word-error');
 const submittedConfirm   = document.getElementById('submitted-confirmation');
 const playersGrid        = document.getElementById('players-grid');
 const historyWrap        = document.getElementById('history-wrap');
 const historyList        = document.getElementById('history-list');
+const topWarningCard     = document.getElementById('top-warning-card');
 
 // Finished elements
 const winningWordEl   = document.getElementById('winning-word');
@@ -125,15 +133,17 @@ function setRoundPrompt(round, revealedWords) {
   if (revealedWords && revealedWords.length > 0) {
     promptLabel.textContent = 'Think of a word related to:';
     revealedWordsEl.innerHTML = '';
-    revealedWords.forEach((word, i) => {
+    revealedWords.forEach((entry, i) => {
+      const word = typeof entry === 'string' ? entry : entry.word;
+      const count = typeof entry === 'string' ? 1 : Number(entry.count || 1);
       const chip = document.createElement('div');
       chip.className = 'word-chip';
-      chip.textContent = word;
+      chip.innerHTML = `${escapeHtml(word)}${count > 1 ? ` <span class="chip-count">x${count}</span>` : ''}`;
       chip.style.animationDelay = `${i * 0.08}s`;
       revealedWordsEl.appendChild(chip);
     });
   } else {
-    promptLabel.textContent = 'Round 1 — Submit your opening word';
+    promptLabel.textContent = `Round ${round} — Submit your word`;
     revealedWordsEl.innerHTML = '';
   }
 }
@@ -141,12 +151,146 @@ function setRoundPrompt(round, revealedWords) {
 // Reset the word input for a new round
 function resetWordInput() {
   hasSubmitted = false;
+  lastSubmittedWord = '';
   wordInput.disabled = false;
   wordInput.value = '';
   submitWordBtn.disabled = false;
+  editWordBtn.classList.add('hidden');
+  editWordBtn.disabled = true;
   wordError.textContent = '';
   submittedConfirm.textContent = '';
+  clearWordSuggestions();
   wordInput.focus();
+}
+
+function setSubmittedState(word) {
+  hasSubmitted = true;
+  lastSubmittedWord = word;
+  wordInput.disabled = true;
+  submitWordBtn.disabled = true;
+  editWordBtn.disabled = false;
+  editWordBtn.classList.remove('hidden');
+  wordError.textContent = '';
+  submittedConfirm.textContent = `✓ "${word}" submitted — waiting for others…`;
+  clearWordSuggestions();
+}
+
+function setEditableState(prefillWord = '') {
+  hasSubmitted = false;
+  wordInput.disabled = false;
+  submitWordBtn.disabled = false;
+  editWordBtn.classList.add('hidden');
+  editWordBtn.disabled = true;
+  if (prefillWord) {
+    wordInput.value = prefillWord;
+  }
+  if (wordInput.value.trim().length < 2) {
+    clearWordSuggestions();
+  }
+  submittedConfirm.textContent = '';
+  wordInput.focus();
+}
+
+function clearWordSuggestions() {
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+    suggestionAbortController = null;
+  }
+  if (suggestionDebounceTimer) {
+    clearTimeout(suggestionDebounceTimer);
+    suggestionDebounceTimer = null;
+  }
+  wordSuggestionsEl.innerHTML = '';
+  wordSuggestionsEl.classList.add('hidden');
+}
+
+function renderWordSuggestions(words) {
+  wordSuggestionsEl.innerHTML = '';
+
+  if (!Array.isArray(words) || words.length === 0) {
+    wordSuggestionsEl.classList.add('hidden');
+    return;
+  }
+
+  words.forEach((word) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'word-suggestion-item';
+    btn.textContent = word;
+    btn.addEventListener('click', () => {
+      wordInput.value = word;
+      clearWordSuggestions();
+      wordInput.focus();
+    });
+    wordSuggestionsEl.appendChild(btn);
+  });
+
+  const note = document.createElement('div');
+  note.className = 'word-suggestions-note';
+  note.textContent = 'English suggestions to help spelling.';
+  wordSuggestionsEl.appendChild(note);
+  wordSuggestionsEl.classList.remove('hidden');
+}
+
+async function fetchEnglishWordSuggestions(query) {
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+  }
+  suggestionAbortController = new AbortController();
+
+  const url = `https://api.datamuse.com/sug?s=${encodeURIComponent(query)}&max=8&v=enwiki`;
+  const res = await fetch(url, { signal: suggestionAbortController.signal });
+  if (!res.ok) throw new Error('Suggestion lookup failed');
+
+  const data = await res.json();
+  return (Array.isArray(data) ? data : [])
+    .map((entry) => String(entry.word || '').toLowerCase())
+    .filter((w) => /^[a-z]+$/.test(w));
+}
+
+function scheduleWordSuggestions() {
+  if (hasSubmitted || wordInput.disabled) {
+    clearWordSuggestions();
+    return;
+  }
+
+  const query = wordInput.value.trim().toLowerCase();
+  if (query.length < 2 || query.includes(' ')) {
+    clearWordSuggestions();
+    return;
+  }
+
+  if (suggestionDebounceTimer) {
+    clearTimeout(suggestionDebounceTimer);
+  }
+
+  suggestionDebounceTimer = setTimeout(async () => {
+    try {
+      const suggestions = await fetchEnglishWordSuggestions(query);
+      renderWordSuggestions(suggestions.filter((w) => w !== query));
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        clearWordSuggestions();
+      }
+    }
+  }, 220);
+}
+
+function toWordCountMap(round) {
+  if (Array.isArray(round.wordStats) && round.wordStats.length > 0) {
+    const map = new Map();
+    round.wordStats.forEach((entry) => {
+      map.set(String(entry.word || '').trim().toLowerCase(), Number(entry.count || 1));
+    });
+    return map;
+  }
+
+  const map = new Map();
+  Object.values(round.words || {}).forEach((word) => {
+    const key = String(word || '').trim().toLowerCase();
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  return map;
 }
 
 // Add a round to the history panel
@@ -154,13 +298,17 @@ function addRoundToHistory(round) {
   historyWrap.classList.remove('hidden');
   const div = document.createElement('div');
   div.className = 'history-round';
+  const wordCounts = toWordCountMap(round);
 
   const wordsHtml = Object.entries(round.words).map(([name, word]) => {
     const color = playerColors[name] || '#666';
+    const key = String(word || '').trim().toLowerCase();
+    const count = wordCounts.get(key) || 1;
     return `
       <div class="history-word-item">
         <span class="history-dot" style="background:${color}"></span>
         <span class="history-word-text">${escapeHtml(word)}</span>
+        ${count > 1 ? `<span class="history-duplicate-tag">shared by ${count}</span>` : ''}
         <span class="history-player-name">${escapeHtml(name)}</span>
       </div>
     `;
@@ -170,7 +318,84 @@ function addRoundToHistory(round) {
     <div class="history-round-label">Round ${round.roundNumber}</div>
     <div class="history-words">${wordsHtml}</div>
   `;
-  historyList.appendChild(div);
+  historyList.prepend(div);
+}
+
+function addInvalidRoundToHistory({ round, missingPlayers, submittedPlayers }) {
+  historyWrap.classList.remove('hidden');
+  const div = document.createElement('div');
+  div.className = 'history-round history-round-invalidated';
+
+  const missing = Array.isArray(missingPlayers) && missingPlayers.length > 0
+    ? missingPlayers.join(', ')
+    : 'none';
+  const submitted = Array.isArray(submittedPlayers) && submittedPlayers.length > 0
+    ? submittedPlayers.join(', ')
+    : 'none';
+
+  div.innerHTML = `
+    <div class="history-round-label history-round-label-inline">
+      <span class="history-invalid-icon" aria-hidden="true">!</span>
+      <span>Round ${round} Invalidated</span>
+      <span class="history-invalid-pill">Timeout</span>
+    </div>
+    <div class="history-invalidated-text">Time expired at 01:00 limit.</div>
+    <div class="history-invalidated-meta">Missing: ${escapeHtml(missing)}</div>
+    <div class="history-invalidated-meta">Submitted (discarded): ${escapeHtml(submitted)}</div>
+  `;
+
+  historyList.prepend(div);
+}
+
+function formatRoundTime(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const m = String(Math.floor(safe / 60)).padStart(2, '0');
+  const s = String(safe % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function updateRoundTimer(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  roundTimer.textContent = formatRoundTime(safe);
+  roundTimer.classList.remove('round-timer-warning', 'round-timer-danger');
+
+  if (safe <= 10) {
+    roundTimer.classList.add('round-timer-danger');
+  } else if (safe <= 20) {
+    roundTimer.classList.add('round-timer-warning');
+  }
+}
+
+function showTopWarningCard(text, durationMs = 2000) {
+  if (topWarningTimeout) {
+    clearTimeout(topWarningTimeout);
+    topWarningTimeout = null;
+  }
+
+  topWarningCard.textContent = text;
+  topWarningCard.classList.remove('hidden');
+
+  topWarningTimeout = setTimeout(() => {
+    topWarningCard.classList.add('hidden');
+  }, durationMs);
+}
+
+function syncMySubmissionState(players) {
+  const me = players.find((p) => p.name === myName);
+  if (!me) return;
+
+  if (me.submitted && !hasSubmitted) {
+    hasSubmitted = true;
+    wordInput.disabled = true;
+    submitWordBtn.disabled = true;
+    editWordBtn.disabled = false;
+    editWordBtn.classList.remove('hidden');
+    submittedConfirm.textContent = '✓ submitted — waiting for others…';
+  }
+
+  if (!me.submitted && hasSubmitted) {
+    setEditableState(lastSubmittedWord);
+  }
 }
 
 // ─── Finished UI ──────────────────────────────────────────────────────────────
@@ -184,12 +409,16 @@ function renderFinishScreen(data) {
   data.rounds.forEach(round => {
     const div = document.createElement('div');
     div.className = 'history-round';
+    const wordCounts = toWordCountMap(round);
     const wordsHtml = Object.entries(round.words).map(([name, word]) => {
       const color = playerColors[name] || '#666';
+      const key = String(word || '').trim().toLowerCase();
+      const count = wordCounts.get(key) || 1;
       return `
         <div class="history-word-item">
           <span class="history-dot" style="background:${color}"></span>
           <span class="history-word-text">${escapeHtml(word)}</span>
+          ${count > 1 ? `<span class="history-duplicate-tag">shared by ${count}</span>` : ''}
           <span class="history-player-name">${escapeHtml(name)}</span>
         </div>
       `;
@@ -285,6 +514,8 @@ socket.on('state_sync', (state) => {
     showScreen('game');
     setRoundPrompt(state.currentRound, state.revealedWords);
     renderPlayersGrid(state.players);
+    updateRoundTimer(state.roundTimeRemaining || 60);
+    syncMySubmissionState(state.players);
   } else if (state.phase === 'finished') {
     showScreen('finished');
   }
@@ -298,6 +529,7 @@ socket.on('players_update', (players) => {
     renderLobbyPlayers(players);
   } else if (screens.game.classList.contains('active')) {
     renderPlayersGrid(players);
+    syncMySubmissionState(players);
   }
 });
 
@@ -338,6 +570,7 @@ socket.on('game_started', ({ players, round, revealedWords }) => {
   setRoundPrompt(round, revealedWords);
   renderPlayersGrid(players);
   resetWordInput();
+  updateRoundTimer(60);
 });
 
 // A round just ended — show reveal, then set up next round
@@ -362,6 +595,29 @@ socket.on('round_reveal', ({ round, nextRound, revealedWords, players }) => {
   }, 2200);
 });
 
+socket.on('round_timer_update', ({ secondsRemaining }) => {
+  updateRoundTimer(secondsRemaining);
+});
+
+socket.on('round_invalidated', ({ round, missingPlayers, submittedPlayers, players }) => {
+  renderPlayersGrid(players);
+  setEditableState('');
+  addInvalidRoundToHistory({ round, missingPlayers, submittedPlayers });
+
+  const missingList = Array.isArray(missingPlayers) && missingPlayers.length > 0
+    ? ` Missing: ${missingPlayers.join(', ')}.`
+    : '';
+  wordError.textContent = `Round ${round} invalidated (1-minute timer expired).${missingList}`;
+});
+
+socket.on('round_warning', ({ phrase, durationMs }) => {
+  showTopWarningCard(phrase || 'haloy sana', durationMs || 2000);
+});
+
+socket.on('submission_edit_enabled', () => {
+  setEditableState(lastSubmittedWord);
+});
+
 // Word submission error
 socket.on('word_error', (msg) => {
   wordError.textContent = msg;
@@ -380,6 +636,7 @@ socket.on('game_reset', () => {
   myName = null;
   myColor = null;
   hasSubmitted = false;
+  lastSubmittedWord = '';
   playerColors = {};
   historyList.innerHTML = '';
   historyWrap.classList.add('hidden');
@@ -391,6 +648,9 @@ socket.on('game_reset', () => {
   chatError.textContent = '';
   showScreen('lobby');
   renderLobbyPlayers([]);
+  updateRoundTimer(60);
+  topWarningCard.classList.add('hidden');
+  clearWordSuggestions();
 });
 
 // ─── User Interactions ────────────────────────────────────────────────────────
@@ -429,16 +689,20 @@ function handleWordSubmit() {
   }
 
   socket.emit('submit_word', { word });
-  hasSubmitted = true;
-  wordInput.disabled = true;
-  submitWordBtn.disabled = true;
-  wordError.textContent = '';
-  submittedConfirm.textContent = `✓ "${word}" submitted — waiting for others…`;
+  setSubmittedState(word);
 }
 
 submitWordBtn.addEventListener('click', handleWordSubmit);
+editWordBtn.addEventListener('click', () => {
+  if (!hasSubmitted) return;
+  socket.emit('edit_submission');
+});
 wordInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleWordSubmit();
+});
+wordInput.addEventListener('input', () => {
+  wordError.textContent = '';
+  scheduleWordSuggestions();
 });
 
 // Play again → reset

@@ -24,6 +24,7 @@ const gameState = {
   currentRound: 0,
   revealedWords: [],    // Words shown as prompts for next round
   chatMessages: [],     // Chat history shown to newly connected players
+  usedWords: new Set(), // Lower-cased words used in finalized rounds
 };
 
 // Palette of distinct player colors
@@ -35,6 +36,15 @@ const PLAYER_COLORS = [
 
 let colorIndex = 0;
 const MAX_CHAT_MESSAGES = 120;
+const ROUND_DURATION_MS = 60 * 1000;
+const ROUND_WARNING_SECONDS = 10;
+const REVEAL_PAUSE_MS = 2200;
+
+let roundDeadlineTs = null;
+let roundTimerInterval = null;
+let roundTimeout = null;
+let revealTimerStartTimeout = null;
+let warningSentForRound = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +72,113 @@ function checkWinCondition(words) {
   // All words match (case-insensitive, trimmed)
   const normalized = words.map(w => w.trim().toLowerCase());
   return normalized.every(w => w === normalized[0]);
+}
+
+function normalizeWord(word) {
+  return String(word || '').trim().toLowerCase();
+}
+
+function buildWordStats(words) {
+  const groups = new Map();
+
+  words.forEach((word) => {
+    const key = word.trim().toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, { word, count: 0 });
+    }
+    groups.get(key).count += 1;
+  });
+
+  return Array.from(groups.values());
+}
+
+function getRoundTimeRemainingSeconds() {
+  if (!roundDeadlineTs) return Math.ceil(ROUND_DURATION_MS / 1000);
+  return Math.max(0, Math.ceil((roundDeadlineTs - Date.now()) / 1000));
+}
+
+function clearRoundTimers() {
+  if (roundTimerInterval) {
+    clearInterval(roundTimerInterval);
+    roundTimerInterval = null;
+  }
+
+  if (roundTimeout) {
+    clearTimeout(roundTimeout);
+    roundTimeout = null;
+  }
+
+  if (revealTimerStartTimeout) {
+    clearTimeout(revealTimerStartTimeout);
+    revealTimerStartTimeout = null;
+  }
+
+  roundDeadlineTs = null;
+  warningSentForRound = null;
+}
+
+function startRoundTimer() {
+  clearRoundTimers();
+
+  if (gameState.phase !== 'submitting') return;
+
+  roundDeadlineTs = Date.now() + ROUND_DURATION_MS;
+  warningSentForRound = null;
+
+  io.emit('round_timer_update', {
+    round: gameState.currentRound,
+    secondsRemaining: getRoundTimeRemainingSeconds(),
+  });
+
+  roundTimerInterval = setInterval(() => {
+    if (gameState.phase !== 'submitting') return;
+
+    const secondsRemaining = getRoundTimeRemainingSeconds();
+    io.emit('round_timer_update', {
+      round: gameState.currentRound,
+      secondsRemaining,
+    });
+
+    if (
+      secondsRemaining <= ROUND_WARNING_SECONDS &&
+      warningSentForRound !== gameState.currentRound
+    ) {
+      const hasUnsubmitted = Object.values(gameState.players).some((player) => !player.submitted);
+      if (hasUnsubmitted) {
+        warningSentForRound = gameState.currentRound;
+        io.emit('round_warning', {
+          round: gameState.currentRound,
+          phrase: 'haloy sana',
+          durationMs: 2000,
+        });
+      }
+    }
+  }, 1000);
+
+  roundTimeout = setTimeout(() => {
+    invalidateCurrentRoundDueToTimeout();
+  }, ROUND_DURATION_MS);
+}
+
+function invalidateCurrentRoundDueToTimeout() {
+  if (gameState.phase !== 'submitting') return;
+
+  const players = Object.values(gameState.players);
+  const submittedPlayers = players.filter((p) => p.submitted).map((p) => p.name);
+  const missingPlayers = players.filter((p) => !p.submitted).map((p) => p.name);
+
+  resetRoundSubmissions();
+  startRoundTimer();
+
+  io.emit('round_invalidated', {
+    round: gameState.currentRound,
+    reason: 'timeout',
+    submittedPlayers,
+    missingPlayers,
+    players: getPlayerList(),
+  });
+
+  broadcastSystemMessage(`Round ${gameState.currentRound} invalidated (time limit reached). Resubmit your words.`);
 }
 
 function buildChatMessage(name, text, system = false) {
@@ -100,6 +217,7 @@ io.on('connection', (socket) => {
     currentRound: gameState.currentRound,
     revealedWords: gameState.revealedWords,
     chatMessages: gameState.chatMessages,
+    roundTimeRemaining: getRoundTimeRemainingSeconds(),
   });
 
   // ── Player joins lobby ──────────────────────────────────────────────────────
@@ -154,7 +272,9 @@ io.on('connection', (socket) => {
     gameState.currentRound = 1;
     gameState.rounds = [];
     gameState.revealedWords = [];
+    gameState.usedWords = new Set();
     resetRoundSubmissions();
+    startRoundTimer();
 
     console.log(`[GAME] Started with ${playerCount} players`);
     io.emit('game_started', {
@@ -176,6 +296,11 @@ io.on('connection', (socket) => {
       return socket.emit('word_error', 'Please submit a single word (no spaces).');
     }
 
+    const normalizedWord = normalizeWord(trimmedWord);
+    if (gameState.usedWords.has(normalizedWord)) {
+      return socket.emit('word_error', 'Already used. Please try another word.');
+    }
+
     player.submitted = true;
     player.word = trimmedWord;
 
@@ -190,6 +315,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Player re-opens submission (edit / undo) ─────────────────────────────
+  socket.on('edit_submission', () => {
+    const player = gameState.players[socket.id];
+    if (!player || gameState.phase !== 'submitting') return;
+    if (!player.submitted) return;
+
+    player.submitted = false;
+    player.word = null;
+
+    io.emit('players_update', getPlayerList());
+    socket.emit('submission_edit_enabled');
+  });
+
   // ── Player disconnects ──────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     const player = gameState.players[socket.id];
@@ -200,10 +338,12 @@ io.on('connection', (socket) => {
 
       const remainingPlayers = Object.keys(gameState.players).length;
       if (remainingPlayers === 0) {
+        clearRoundTimers();
         gameState.phase = 'lobby';
         gameState.rounds = [];
         gameState.currentRound = 0;
         gameState.revealedWords = [];
+        gameState.usedWords = new Set();
         gameState.chatMessages = [];
         colorIndex = 0;
 
@@ -224,6 +364,8 @@ io.on('connection', (socket) => {
 
   // ── Reset game ──────────────────────────────────────────────────────────────
   socket.on('reset_game', () => {
+    clearRoundTimers();
+
     Object.keys(gameState.players).forEach(id => {
       gameState.players[id].submitted = false;
       gameState.players[id].word = null;
@@ -232,6 +374,7 @@ io.on('connection', (socket) => {
     gameState.rounds = [];
     gameState.currentRound = 0;
     gameState.revealedWords = [];
+    gameState.usedWords = new Set();
     colorIndex = 0;
 
     // Clear all players so everyone re-joins fresh
@@ -247,6 +390,8 @@ io.on('connection', (socket) => {
 // ─── Round Processing ─────────────────────────────────────────────────────────
 
 function processRoundEnd() {
+  clearRoundTimers();
+
   const players = Object.values(gameState.players);
   const wordMap = {}; // { playerName: word }
   const wordList = [];
@@ -256,9 +401,14 @@ function processRoundEnd() {
     wordList.push(p.word);
   });
 
+  wordList.forEach((word) => {
+    gameState.usedWords.add(normalizeWord(word));
+  });
+
   const roundData = {
     roundNumber: gameState.currentRound,
     words: wordMap,
+    wordStats: buildWordStats(wordList),
     allSame: checkWinCondition(wordList),
   };
 
@@ -275,22 +425,26 @@ function processRoundEnd() {
     });
   } else {
     // ── Next Round ────────────────────────────────────────────────────────────
-    // Collect unique revealed words for the next prompt
-    const uniqueWords = [...new Set(wordList.map(w => w.toLowerCase()))].map(
-      w => wordList.find(x => x.toLowerCase() === w) // preserve original casing
-    );
-    gameState.revealedWords = uniqueWords;
+    gameState.revealedWords = roundData.wordStats;
     gameState.currentRound++;
     resetRoundSubmissions();
     gameState.phase = 'submitting';
 
-    console.log(`[GAME] Round ${gameState.currentRound} — revealed: ${uniqueWords.join(', ')}`);
+    console.log(
+      `[GAME] Round ${gameState.currentRound} — revealed: ${gameState.revealedWords
+        .map((entry) => `${entry.word}${entry.count > 1 ? ` x${entry.count}` : ''}`)
+        .join(', ')}`
+    );
     io.emit('round_reveal', {
       round: roundData,
       nextRound: gameState.currentRound,
-      revealedWords: uniqueWords,
+      revealedWords: gameState.revealedWords,
       players: getPlayerList(),
     });
+
+    revealTimerStartTimeout = setTimeout(() => {
+      startRoundTimer();
+    }, REVEAL_PAUSE_MS);
   }
 }
 
