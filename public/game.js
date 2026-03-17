@@ -611,7 +611,7 @@ socket.on('round_invalidated', ({ round, missingPlayers, submittedPlayers, playe
 });
 
 socket.on('round_warning', ({ phrase, durationMs }) => {
-  showTopWarningCard(phrase || 'haloy sana', durationMs || 2000);
+  showTopWarningCard(phrase || 'haloy sana!!', durationMs || 2000);
 });
 
 socket.on('submission_edit_enabled', () => {
@@ -677,6 +677,10 @@ startBtn.addEventListener('click', () => {
 
 // Submit word during game
 function handleWordSubmit() {
+  if (!myName) {
+    wordError.textContent = 'Join with your name first to submit a word.';
+    return;
+  }
   if (hasSubmitted) return;
   const word = wordInput.value.trim();
   if (!word) {

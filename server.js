@@ -37,14 +37,16 @@ const PLAYER_COLORS = [
 let colorIndex = 0;
 const MAX_CHAT_MESSAGES = 120;
 const ROUND_DURATION_MS = 60 * 1000;
-const ROUND_WARNING_SECONDS = 10;
+const ROUND_WARNING_30_SECONDS = 30;
+const ROUND_WARNING_10_SECONDS = 10;
 const REVEAL_PAUSE_MS = 2200;
 
 let roundDeadlineTs = null;
 let roundTimerInterval = null;
 let roundTimeout = null;
 let revealTimerStartTimeout = null;
-let warningSentForRound = null;
+let warning30SentForRound = null;
+let warning10SentForRound = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,7 +116,8 @@ function clearRoundTimers() {
   }
 
   roundDeadlineTs = null;
-  warningSentForRound = null;
+  warning30SentForRound = null;
+  warning10SentForRound = null;
 }
 
 function startRoundTimer() {
@@ -123,7 +126,8 @@ function startRoundTimer() {
   if (gameState.phase !== 'submitting') return;
 
   roundDeadlineTs = Date.now() + ROUND_DURATION_MS;
-  warningSentForRound = null;
+  warning30SentForRound = null;
+  warning10SentForRound = null;
 
   io.emit('round_timer_update', {
     round: gameState.currentRound,
@@ -140,15 +144,32 @@ function startRoundTimer() {
     });
 
     if (
-      secondsRemaining <= ROUND_WARNING_SECONDS &&
-      warningSentForRound !== gameState.currentRound
+      secondsRemaining <= ROUND_WARNING_30_SECONDS &&
+      warning30SentForRound !== gameState.currentRound
     ) {
       const hasUnsubmitted = Object.values(gameState.players).some((player) => !player.submitted);
       if (hasUnsubmitted) {
-        warningSentForRound = gameState.currentRound;
+        warning30SentForRound = gameState.currentRound;
         io.emit('round_warning', {
           round: gameState.currentRound,
-          phrase: 'haloy sana',
+          phrase: 'haloy sana!!',
+          durationMs: 2000,
+        });
+      }
+    }
+
+    if (
+      secondsRemaining <= ROUND_WARNING_10_SECONDS &&
+      warning10SentForRound !== gameState.currentRound
+    ) {
+      const missingPlayers = Object.values(gameState.players)
+        .filter((player) => !player.submitted)
+        .map((player) => player.name);
+      if (missingPlayers.length > 0) {
+        warning10SentForRound = gameState.currentRound;
+        io.emit('round_warning', {
+          round: gameState.currentRound,
+          phrase: `tultol ngani (${missingPlayers.join(', ')})!!`,
           durationMs: 2000,
         });
       }
@@ -229,7 +250,9 @@ io.on('connection', (socket) => {
       p => p.name.toLowerCase() === trimmedName.toLowerCase()
     );
     if (nameTaken) return socket.emit('join_error', 'That name is already taken!');
-    if (gameState.phase !== 'lobby') return socket.emit('join_error', 'Game already in progress.');
+    if (gameState.phase === 'finished') {
+      return socket.emit('join_error', 'Match already finished. Please wait for reset.');
+    }
 
     // Register player
     gameState.players[socket.id] = {
@@ -243,7 +266,18 @@ io.on('connection', (socket) => {
     console.log(`  Player joined: ${trimmedName}`);
     socket.emit('join_success', { name: trimmedName, color: gameState.players[socket.id].color });
     io.emit('players_update', getPlayerList());
-    broadcastSystemMessage(`${trimmedName} joined the lobby.`);
+    if (gameState.phase === 'lobby') {
+      broadcastSystemMessage(`${trimmedName} joined the lobby.`);
+    } else {
+      broadcastSystemMessage(`${trimmedName} joined the ongoing match.`);
+    }
+
+    if (gameState.phase === 'submitting') {
+      socket.emit('round_timer_update', {
+        round: gameState.currentRound,
+        secondsRemaining: getRoundTimeRemainingSeconds(),
+      });
+    }
   });
 
   // ── Chat message ───────────────────────────────────────────────────────────
