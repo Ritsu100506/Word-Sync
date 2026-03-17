@@ -297,16 +297,6 @@ input[type="text"]:disabled {
   font-size: 0.78rem;
 }
 
-.submit-actions-row {
-  margin-top: 10px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.submit-actions-row .btn {
-  width: auto;
-}
-
 /* ── Start / play-again area ────────────────────────────────── */
 .start-area {
   display: flex;
@@ -379,16 +369,31 @@ input[type="text"]:disabled {
 .how-to-list li strong { color: var(--text); }
 
 /* ── Game round header ──────────────────────────────────────── */
+.game-sticky-top {
+  position: sticky;
+  top: 8px;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
 .game-round-header {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 10px;
-  padding: 4px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px #00000030;
 }
 .round-badge {
-  background: var(--surface);
-  border: 1px solid var(--card-border);
+  background: transparent;
+  border: 1px solid #ffffff10;
   border-radius: 99px;
   padding: 6px 20px;
   font-size: 0.85rem;
@@ -404,7 +409,7 @@ input[type="text"]:disabled {
 
 .round-timer {
   background: #111325;
-  border: 1px solid var(--card-border);
+  border: 1px solid #ffffff12;
   border-radius: 99px;
   padding: 6px 14px;
   min-width: 78px;
@@ -432,9 +437,6 @@ input[type="text"]:disabled {
 }
 
 .top-warning-card {
-  position: sticky;
-  top: 8px;
-  z-index: 20;
   margin: 0 auto;
   width: min(360px, 100%);
   text-align: center;
@@ -815,6 +817,10 @@ input[type="text"]:disabled {
 
 /* ── Responsive tweaks ──────────────────────────────────────── */
 @media (max-width: 768px) {
+  .game-sticky-top {
+    top: 6px;
+  }
+
   .players-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -831,6 +837,10 @@ input[type="text"]:disabled {
 }
 
 @media (max-width: 520px) {
+  .game-round-header {
+    padding: 8px 10px;
+  }
+
   .input-row {
     flex-direction: column;
     gap: 10px;
@@ -848,7 +858,8 @@ input[type="text"]:disabled {
   }
 
   .round-badge {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     text-align: center;
   }
 
@@ -858,14 +869,6 @@ input[type="text"]:disabled {
 
   .chat-form {
     flex-direction: column;
-  }
-
-  .submit-actions-row {
-    justify-content: stretch;
-  }
-
-  .submit-actions-row .btn {
-    width: 100%;
   }
 
   .chat-form .btn {

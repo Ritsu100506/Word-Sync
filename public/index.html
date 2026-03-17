@@ -80,15 +80,17 @@
   <div id="screen-game" class="screen">
     <div class="container">
 
-      <div id="top-warning-card" class="top-warning-card hidden" role="status" aria-live="polite"></div>
+      <div class="game-sticky-top">
+        <div id="top-warning-card" class="top-warning-card hidden" role="status" aria-live="polite"></div>
 
-      <!-- Round counter badge -->
-      <header class="game-round-header">
-        <div class="round-badge">
-          Round <span id="round-number">1</span>
-        </div>
-        <div class="round-timer" id="round-timer">01:00</div>
-      </header>
+        <!-- Round counter badge -->
+        <header class="game-round-header">
+          <div class="round-badge">
+            Round <span id="round-number">1</span>
+          </div>
+          <div class="round-timer" id="round-timer">01:00</div>
+        </header>
+      </div>
 
       <!-- Prompt + revealed word chips -->
       <section class="card prompt-card">
@@ -111,9 +113,6 @@
           <button id="edit-word-btn" class="btn btn-secondary hidden" type="button">Edit</button>
         </div>
         <div id="word-suggestions" class="word-suggestions hidden" aria-live="polite"></div>
-        <div class="submit-actions-row">
-          <button id="proceed-round-btn" class="btn btn-accent hidden" type="button">Proceed to Next Round</button>
-        </div>
         <p id="word-error" class="error-text" aria-live="polite"></p>
         <p id="submitted-confirmation" class="confirm-text" aria-live="polite"></p>
       </section>

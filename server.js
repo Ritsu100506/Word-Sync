@@ -40,15 +40,16 @@ const ROUND_DURATION_MS = 60 * 1000;
 const ROUND_WARNING_30_SECONDS = 30;
 const ROUND_WARNING_10_SECONDS = 10;
 const REVEAL_PAUSE_MS = 2200;
+const INVALIDATION_ADVANCE_PAUSE_MS = 2200;
 const WARNING_POPUP_DURATION_MS = 5000;
 
 let roundDeadlineTs = null;
 let roundTimerInterval = null;
 let roundTimeout = null;
 let revealTimerStartTimeout = null;
+let invalidationAdvanceTimeout = null;
 let warning30SentForRound = null;
 let warning10SentForRound = null;
-let invalidatedRoundNumber = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,11 @@ function clearRoundTimers() {
     revealTimerStartTimeout = null;
   }
 
+  if (invalidationAdvanceTimeout) {
+    clearTimeout(invalidationAdvanceTimeout);
+    invalidationAdvanceTimeout = null;
+  }
+
   roundDeadlineTs = null;
   warning30SentForRound = null;
   warning10SentForRound = null;
@@ -130,7 +136,6 @@ function startRoundTimer() {
   roundDeadlineTs = Date.now() + ROUND_DURATION_MS;
   warning30SentForRound = null;
   warning10SentForRound = null;
-  invalidatedRoundNumber = null;
 
   io.emit('round_timer_update', {
     round: gameState.currentRound,
@@ -187,46 +192,43 @@ function startRoundTimer() {
 function invalidateCurrentRoundDueToTimeout() {
   if (gameState.phase !== 'submitting') return;
 
+  clearRoundTimers();
+
   const players = Object.values(gameState.players);
   const submittedPlayers = players.filter((p) => p.submitted).map((p) => p.name);
   const missingPlayers = players.filter((p) => !p.submitted).map((p) => p.name);
+  const invalidatedRound = gameState.currentRound;
 
   resetRoundSubmissions();
-  invalidatedRoundNumber = gameState.currentRound;
-  startRoundTimer();
 
   io.emit('round_invalidated', {
-    round: gameState.currentRound,
+    round: invalidatedRound,
     reason: 'timeout',
     submittedPlayers,
     missingPlayers,
     players: getPlayerList(),
   });
 
-  broadcastSystemMessage(`Round ${gameState.currentRound} invalidated (time limit reached). Resubmit your words.`);
-}
+  broadcastSystemMessage(`Round ${invalidatedRound} invalidated (time limit reached). Advancing automatically.`);
 
-function advanceToNextRoundAfterInvalidation() {
-  if (gameState.phase !== 'submitting' || invalidatedRoundNumber !== gameState.currentRound) {
-    return false;
-  }
+  invalidationAdvanceTimeout = setTimeout(() => {
+    if (gameState.phase !== 'submitting' || gameState.currentRound !== invalidatedRound) {
+      return;
+    }
 
-  invalidatedRoundNumber = null;
-  clearRoundTimers();
+    gameState.currentRound += 1;
+    resetRoundSubmissions();
 
-  gameState.currentRound += 1;
-  resetRoundSubmissions();
-  gameState.phase = 'submitting';
+    io.emit('round_advanced_after_invalidation', {
+      invalidatedRound,
+      nextRound: gameState.currentRound,
+      revealedWords: gameState.revealedWords,
+      players: getPlayerList(),
+    });
 
-  io.emit('round_advanced_after_invalidation', {
-    nextRound: gameState.currentRound,
-    revealedWords: gameState.revealedWords,
-    players: getPlayerList(),
-  });
-
-  broadcastSystemMessage(`Moved on to round ${gameState.currentRound} after timeout invalidation.`);
-  startRoundTimer();
-  return true;
+    broadcastSystemMessage(`Round ${gameState.currentRound} started after timeout invalidation.`);
+    startRoundTimer();
+  }, INVALIDATION_ADVANCE_PAUSE_MS);
 }
 
 function buildChatMessage(name, text, system = false) {
@@ -266,7 +268,6 @@ io.on('connection', (socket) => {
     revealedWords: gameState.revealedWords,
     chatMessages: gameState.chatMessages,
     roundTimeRemaining: getRoundTimeRemainingSeconds(),
-    canProceedAfterInvalidation: invalidatedRoundNumber === gameState.currentRound,
   });
 
   // ── Player joins lobby ──────────────────────────────────────────────────────
@@ -390,11 +391,6 @@ io.on('connection', (socket) => {
     socket.emit('submission_edit_enabled');
   });
 
-  // ── Proceed after timeout invalidation ───────────────────────────────────
-  socket.on('proceed_after_invalid_round', () => {
-    advanceToNextRoundAfterInvalidation();
-  });
-
   // ── Player disconnects ──────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     const player = gameState.players[socket.id];
@@ -412,7 +408,6 @@ io.on('connection', (socket) => {
         gameState.revealedWords = [];
         gameState.usedWords = new Set();
         gameState.chatMessages = [];
-        invalidatedRoundNumber = null;
         colorIndex = 0;
 
         console.log('[GAME] No players remaining, reset to lobby');
@@ -443,7 +438,6 @@ io.on('connection', (socket) => {
     gameState.currentRound = 0;
     gameState.revealedWords = [];
     gameState.usedWords = new Set();
-    invalidatedRoundNumber = null;
     colorIndex = 0;
 
     // Clear all players so everyone re-joins fresh
